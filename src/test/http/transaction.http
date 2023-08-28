@@ -1,0 +1,19 @@
+### use balance
+POST http://localhost:8080/tansaction/use
+Content-Type: application/json
+
+{
+  "userId": 1,
+  "accountNumber": "1000000",
+  "amount": 100
+}
+
+### use balance2
+POST http://localhost:8080/tansaction/use
+Content-Type: application/json
+
+{
+  "userId": 1,
+  "accountNumber": "1000000",
+  "amount": 100
+}
