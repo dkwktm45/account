@@ -11,6 +11,7 @@ import com.zerobase.account.repository.TransactionRepository;
 import com.zerobase.account.type.AccountStatus;
 import com.zerobase.account.type.ErrorCode;
 import com.zerobase.account.type.TransactionResultType;
+import com.zerobase.account.type.TransactionType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -70,8 +71,8 @@ public class TransactionService {
 
     saveEndTransaction(F, account, amount);
   }
-
-  private Transaction saveEndTransaction(
+  @Transactional
+  public Transaction saveEndTransaction(
       TransactionResultType f, Account account, Long amount) {
     return transactionRepository.save(
         Transaction.builder()
@@ -84,4 +85,60 @@ public class TransactionService {
             .transactionAt(LocalDateTime.now())
             .build());
   }
+  @Transactional
+  public TransactionDto queryTransaction(String transactionId) {
+    return TransactionDto.fromEntity(
+        transactionRepository.findByTransactionUUID(transactionId)
+            .orElseThrow(() -> new AccountException(ErrorCode.TRANSACTION_NOT_FOUND))
+    );
+  }
+
+  public TransactionDto cancelBalance(String transactionId, String accountNumber, Long amount) {
+    Transaction transaction = transactionRepository.findByTransactionUUID(transactionId)
+        .orElseThrow(() -> new AccountException(ErrorCode.TRANSACTION_NOT_FOUND));    //잔액 사용 취소.
+    Account account = accountRepository.findByAccountNumber(accountNumber)
+        .orElseThrow(() -> new AccountException(ErrorCode.ACCOUNT_NOT_FOUND));        //계좌가 없는 경우
+
+    validateCancelBalance(transaction, account, amount);
+
+    account.cancelBalance(amount);
+
+    return TransactionDto.fromEntity(
+        saveAndGetTransaction(CANCEL, S, account, amount)
+    );
+  }
+
+  private void validateCancelBalance(Transaction transaction, Account account, Long amount) {
+    if (!Objects.equals(transaction.getAccount().getAccountId(),
+        account.getAccountId())) {
+      throw new AccountException(ErrorCode.TRANSACTION_ACCOUNT_UN_MATCH);
+    }
+    if (!Objects.equals(transaction.getAmount(), amount)) {
+      throw new AccountException(ErrorCode.CANCEL_MUST_FULLY);
+    }
+    if (transaction.getTransactionAt().isBefore(LocalDateTime.now().minusYears(1))) {
+      throw new AccountException(ErrorCode.TOO_OLD_ORDER_TO_CANCEL);
+    }
+  }
+
+  private Transaction saveAndGetTransaction(
+      TransactionType transactionType,
+      TransactionResultType transactionResultType,
+      Account account,
+      Long amount
+  ) {
+
+    return transactionRepository.save(
+        Transaction.builder()
+            .transactionType(transactionType)
+            .transactionResultType(transactionResultType)
+            .account(account)
+            .amount(amount)
+            .balanceSnapshot(account.getBalance())
+            .transactionUUID(UUID.randomUUID().toString().replace("-", ""))
+            .transactionAt(LocalDateTime.now())
+            .build()
+    );
+  }
+
 }
